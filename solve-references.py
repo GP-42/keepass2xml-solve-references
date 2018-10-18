@@ -22,7 +22,13 @@ pattern_field_value = re.compile(r'<Value[^>]*>([^<]+)</Value>')
 
 # Convert reference string given in HEX to base64
 def convert_uuid_to_base64(value):
-	return value.decode('hex') .encode('base64')
+	try:
+		return value.decode('hex').encode('base64')
+	except AttributeError as err:
+		print('Type: %s' % type(value))
+		print('Value: %s' % value)
+		print(err)
+		exit(1)
 
 
 # Extract username and password of given references from XML tree
