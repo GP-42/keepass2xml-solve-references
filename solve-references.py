@@ -18,7 +18,7 @@ pattern_uuid = re.compile(r'<UUID>([^<]+)</UUID>')
 # Pattern to detect hex-encoded UUIDs used in value references
 pattern_reference = re.compile(r'\{REF:(P|U)@I:([0-9A-F]+)\}', re.IGNORECASE)
 # Pattern to detect the value of username and password fields
-pattern_field_value = re.compile(r'<Value[^>]*>([^<]+)</Value>')
+pattern_field_value = re.compile(r'((<Value[^>]*>([^<]+)</Value>)|(<Value[^>]*/>))')
 
 
 # Convert reference string given in HEX to base64
