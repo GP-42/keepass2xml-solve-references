@@ -37,6 +37,9 @@ def get_credentials_from_references(lines, references, references_set):
 	username_found = None
 	# password for given UUID
 	password_found = None
+	
+	reference_values = references.values()
+	to_be_checked = set()
 
 	# Line counter for getting values from "next" line which contains the key value for username and password
 	line_counter = -1
@@ -73,7 +76,7 @@ def get_credentials_from_references(lines, references, references_set):
 		if uuid_found is None:
 			continue
 
-		# UUID is set and the next line contain the username value
+		# UUID is set and the next line contains the username value
 		if '<Key>UserName</Key>' in line:
 			search = pattern_field_value.search(lines[line_counter + 1])
 			if not search:
@@ -82,14 +85,22 @@ def get_credentials_from_references(lines, references, references_set):
 				exit(1)
 
 			username_found = search.group(1)
-			# Username value is a reference -> do not use it
+			# Username value is a reference -> follow reference
 			search = pattern_reference.search(username_found)
 			if search:
-				uuid_found = None
-				continue
+				result = search.group(2)
+				result = result.strip()
+				if result in reference_values:
+					if result in credentials:
+						username_found = credentials[result][0]
+					else:
+						if result not in to_be_checked:
+							to_be_checked.add(uuid_found)
+				else:
+					uuid_found = None
+					continue
 
-
-		# UUID is set and the next line contain the password value
+		# UUID is set and the next line contains the password value
 		if '<Key>Password</Key>' in line:
 			search = pattern_field_value.search(lines[line_counter + 1])
 			if not search:
@@ -98,11 +109,20 @@ def get_credentials_from_references(lines, references, references_set):
 				exit(1)
 
 			password_found = search.group(1)
-			# Password value is a reference -> do not use it
+			# Password value is a reference -> follow reference
 			search = pattern_reference.search(password_found)
 			if search:
-				uuid_found = None
-				continue
+				result = search.group(2)
+				result = result.strip()
+				if result in reference_values:
+					if result in credentials:
+						password_found = credentials[result][1]
+					else:
+						if result not in to_be_checked:
+							to_be_checked.add(uuid_found)
+				else:
+					uuid_found = None
+					continue
 
 		# UUID, username and password were found -> store in credentials dictionary
 		if uuid_found is not None and username_found is not None and password_found is not None:
@@ -110,6 +130,43 @@ def get_credentials_from_references(lines, references, references_set):
 			uuid_found = None
 			username_found = None
 			password_found = None
+
+	# As long as our credentials contain references, we resolve them
+	while len(to_be_checked) > 0:
+		to_be_removed = set()
+		
+		for check in to_be_checked:
+			can_be_removed = True
+			
+			search = pattern_reference.search(credentials[check][0])
+			if search:
+				result = search.group(2)
+				result = result.strip()
+				if result in credentials:
+					username_found = credentials[result][0]
+				else:
+					can_be_removed = False
+			else:
+				username_found = credentials[check][0]
+			
+			search = pattern_reference.search(credentials[check][1])
+			if search:
+				result = search.group(2)
+				result = result.strip()
+				if result in credentials:
+					password_found = credentials[result][1]
+				else:
+					can_be_removed = False
+			else:
+				password_found = credentials[check][1]
+			
+			credentials[check] = (username_found, password_found)
+			
+			if can_be_removed:
+				to_be_removed.add(check)
+				
+		for item in to_be_removed:
+			to_be_checked.remove(item)
 
 	return credentials
 
@@ -119,7 +176,6 @@ if len(sys.argv) != 2:
 	print('ERROR: No file for conversion given!')
 	print('    Call the script: $ python solve-references.py /filepath/to/keepass2.xml')
 	exit(1)
-
 
 filepath = sys.argv[1]
 
@@ -150,7 +206,6 @@ for line in lines:
 		references[ref_base64] = ref_hex
 		references_set.add(ref_base64)
 
-
 credentials = get_credentials_from_references(lines, references, references_set)
 
 print('%s references found' % len(references))
@@ -177,9 +232,9 @@ for line in lines:
 
 		is_username = search.group(1) == 'U'
 		if is_username:
-			line = pattern_reference.sub(credentials[ref_hex][0], line)
+			line = credentials[ref_hex][0]
 		else:
-			line = pattern_reference.sub(credentials[ref_hex][1], line)
+			line = credentials[ref_hex][1]
 		count_replaces += 1
 
 	output.append(line)
